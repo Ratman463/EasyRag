@@ -5,12 +5,69 @@ const API_BASE = '/api';
 document.addEventListener('DOMContentLoaded', () => {
     loadDocuments();
     setupUploadArea();
+    setupNavigation();
 });
 
-// Setup upload area drag and drop
+// ===== Section Navigation =====
+function switchSection(sectionName) {
+    // Hide all sections
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.remove('active');
+        section.style.display = 'none';
+    });
+
+    // Show target section
+    const target = document.getElementById(`section-${sectionName}`);
+    if (target) {
+        target.style.display = 'block';
+        // Trigger animation
+        requestAnimationFrame(() => {
+            target.classList.add('active');
+        });
+    }
+
+    // Update sidebar active state
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.dataset.section === sectionName) {
+            item.classList.add('active');
+        }
+    });
+
+    // Update nav active state
+    document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+        link.classList.remove('active');
+        if (link.dataset.section === sectionName) {
+            link.classList.add('active');
+        }
+    });
+
+    // Show results section if that's where we're going
+    if (sectionName === 'results') {
+        const resultsSection = document.getElementById('section-results');
+        if (resultsSection) resultsSection.style.display = 'block';
+    }
+}
+
+function setupNavigation() {
+    // Nav links click handlers
+    document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchSection(link.dataset.section);
+        });
+    });
+
+    // Show upload section by default
+    switchSection('upload');
+}
+
+// ===== Upload Area =====
 function setupUploadArea() {
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('file-input');
+
+    if (!uploadArea) return;
 
     uploadArea.addEventListener('click', () => fileInput.click());
 
@@ -56,17 +113,17 @@ async function uploadFile(file) {
         const data = await response.json();
 
         if (response.ok) {
-            statusDiv.innerHTML = `<div class="status success">✅ ${data.message}<br>File: ${data.filename}<br>Chunks added: ${data.chunks_added}</div>`;
+            statusDiv.innerHTML = `<div class="status success">Uploaded: ${escapeHtml(data.filename)} — ${data.chunks_added} chunks added</div>`;
             loadDocuments();
         } else {
-            statusDiv.innerHTML = `<div class="status error">❌ Error: ${data.detail}</div>`;
+            statusDiv.innerHTML = `<div class="status error">Error: ${escapeHtml(data.detail)}</div>`;
         }
     } catch (error) {
-        statusDiv.innerHTML = `<div class="status error">❌ Upload failed: ${error.message}</div>`;
+        statusDiv.innerHTML = `<div class="status error">Upload failed: ${escapeHtml(error.message)}</div>`;
     }
 }
 
-// Load documents
+// ===== Documents =====
 async function loadDocuments() {
     const container = document.getElementById('documents-container');
 
@@ -75,29 +132,35 @@ async function loadDocuments() {
         const documents = await response.json();
 
         if (documents.length === 0) {
-            container.innerHTML = '<div class="empty-state">No documents uploaded yet</div>';
+            container.innerHTML = '<div class="empty-state">No documents uploaded yet. Drop files in the Upload section to get started.</div>';
+            updateCounter('docs-counter', '');
+            updateCounter('upload-counter', '');
             return;
         }
+
+        const totalChunks = documents.reduce((sum, doc) => sum + doc.chunk_count, 0);
+        updateCounter('docs-counter', `${documents.length} docs · ${totalChunks} chunks`);
+        updateCounter('upload-counter', `${documents.length} documents`);
 
         container.innerHTML = '<div class="documents-list">' +
             documents.map(doc => `
                 <div class="document-item">
                     <div class="document-info">
-                        <div class="document-name">📄 ${doc.filename}</div>
-                        <div class="document-meta">${doc.chunk_count} chunks • ${new Date(doc.created_at).toLocaleString()}</div>
+                        <div class="document-name">${escapeHtml(doc.filename)}</div>
+                        <div class="document-meta">${doc.chunk_count} chunks · ${new Date(doc.created_at).toLocaleDateString()}</div>
                     </div>
-                    <button class="btn btn-danger btn-delete" onclick="deleteDocument('${doc.filename}')">Delete</button>
+                    <button class="btn-delete" onclick="deleteDocument('${escapeHtml(doc.filename)}')">Delete</button>
                 </div>
             `).join('') +
             '</div>';
     } catch (error) {
-        container.innerHTML = `<div class="status error">Failed to load documents: ${error.message}</div>`;
+        container.innerHTML = `<div class="status error">Failed to load documents: ${escapeHtml(error.message)}</div>`;
     }
 }
 
 // Delete document
 async function deleteDocument(filename) {
-    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+    if (!confirm(`Delete "${filename}"?`)) {
         return;
     }
 
@@ -117,26 +180,30 @@ async function deleteDocument(filename) {
     }
 }
 
-// Query documents
+// ===== Query =====
 async function queryDocuments() {
     const queryInput = document.getElementById('query-input');
     const topK = document.getElementById('top-k').value;
     const query = queryInput.value.trim();
 
     if (!query) {
-        alert('Please enter a question');
+        queryInput.focus();
+        queryInput.style.borderColor = 'var(--danger)';
+        setTimeout(() => { queryInput.style.borderColor = ''; }, 2000);
         return;
     }
 
     const queryBtn = document.getElementById('query-btn');
-    const resultsCard = document.getElementById('results-card');
+    const resultsSection = document.getElementById('section-results');
     const resultsContainer = document.getElementById('results-container');
 
     // Show loading state
     queryBtn.disabled = true;
     queryBtn.innerHTML = '<span class="loading"></span> Searching...';
-    resultsCard.style.display = 'block';
-    resultsContainer.innerHTML = '<div class="status info">Searching knowledge base...</div>';
+
+    // Switch to results section
+    switchSection('results');
+    resultsContainer.innerHTML = '<div class="status info"><span class="loading"></span> Searching knowledge base...</div>';
 
     try {
         const response = await fetch(`${API_BASE}/query`, {
@@ -153,36 +220,49 @@ async function queryDocuments() {
         const data = await response.json();
 
         if (data.results.length === 0) {
-            resultsContainer.innerHTML = '<div class="empty-state">No relevant documents found. Try uploading some documents first!</div>';
+            resultsContainer.innerHTML = '<div class="empty-state">No relevant documents found. Try uploading some documents first.</div>';
+            updateCounter('results-counter', '0 results');
         } else {
+            updateCounter('results-counter', `${data.results.length} results`);
             resultsContainer.innerHTML = data.results.map((result, index) => `
                 <div class="result-item">
                     <div class="result-header">
-                        <span class="result-source">📄 ${result.filename} (Chunk ${result.chunk_index + 1})</span>
-                        <span class="result-score">Score: ${result.similarity.toFixed(4)}</span>
+                        <span class="result-source">${escapeHtml(result.filename)} · Chunk ${result.chunk_index + 1}</span>
+                        <span class="result-score">
+                            <span class="result-score-text">score:\u00A0\u00A0</span>
+                            ${result.similarity.toFixed(4)}
+                        </span>
                     </div>
                     <div class="result-content">${escapeHtml(result.content)}</div>
                 </div>
             `).join('');
         }
     } catch (error) {
-        resultsContainer.innerHTML = `<div class="status error">Query failed: ${error.message}</div>`;
+        resultsContainer.innerHTML = `<div class="status error">Query failed: ${escapeHtml(error.message)}</div>`;
     } finally {
         queryBtn.disabled = false;
-        queryBtn.innerHTML = 'Search';
+        queryBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Search`;
     }
 }
 
-// Escape HTML to prevent XSS
+// ===== Helpers =====
+function updateCounter(elementId, text) {
+    const el = document.getElementById(elementId);
+    if (el) el.textContent = text;
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// Allow Enter key to submit query
-document.getElementById('query-input').addEventListener('keydown', (e) => {
+// Keyboard shortcut: Ctrl+Enter to search
+document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.ctrlKey) {
-        queryDocuments();
+        const queryInput = document.getElementById('query-input');
+        if (queryInput && document.activeElement === queryInput) {
+            queryDocuments();
+        }
     }
 });
