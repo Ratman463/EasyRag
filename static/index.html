@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EasyRag - Simple RAG System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        /* Upload Section */
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+
+        .upload-area.dragover {
+            background: #f0f4ff;
+            border-color: #667eea;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        /* Documents List */
+        .documents-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .document-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .document-item:last-child {
+            border-bottom: none;
+        }
+
+        .document-info {
+            flex: 1;
+        }
+
+        .document-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .document-meta {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+        /* Query Section */
+        .query-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 8px;
+            font-size: 1rem;
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .query-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .query-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Results Section */
+        .results-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .result-source {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .result-score {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .result-content {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        /* Status Messages */
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #e7f3ff;
+            color: #004085;
+        }
+
+        /* Loading Spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            opacity: 0.8;
+        }
+
+        footer a {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 EasyRag</h1>
+            <p>A simple RAG system using Python and sqlite-vec</p>
+        </header>
+
+        <div class="grid">
+            <!-- Upload Section -->
+            <div class="card">
+                <h2>📤 Upload Documents</h2>
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-icon">📄</div>
+                    <p class="upload-text">Drag & drop files here or click to browse</p>
+                    <p class="upload-hint">Supported formats: PDF, TXT, DOCX</p>
+                    <input type="file" id="file-input" accept=".pdf,.txt,.docx">
+                </div>
+                <div id="upload-status"></div>
+            </div>
+
+            <!-- Documents List -->
+            <div class="card">
+                <h2>📁 Document Library</h2>
+                <div id="documents-container">
+                    <div class="empty-state">Loading documents...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Section -->
+        <div class="card">
+            <h2>🔍 Query Knowledge Base</h2>
+            <textarea class="query-input" id="query-input" placeholder="Enter your question here..."></textarea>
+            <div class="query-actions">
+                <button class="btn" id="query-btn" onclick="queryDocuments()">
+                    Search
+                </button>
+                <select id="top-k" style="padding: 12px; border-radius: 6px; border: 2px solid #eee;">
+                    <option value="3">Top 3 results</option>
+                    <option value="5" selected>Top 5 results</option>
+                    <option value="10">Top 10 results</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="card" id="results-card" style="display: none;">
+            <h2>📋 Search Results</h2>
+            <div class="results-container" id="results-container"></div>
+        </div>
+
+        <footer>
+            <p>EasyRag - Built with FastAPI & sqlite-vec</p>
+        </footer>
+    </div>
+
+    <script>
+        // API Base URL
+        const API_BASE = '/api';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDocuments();
+            setupUploadArea();
+        });
+
+        // Setup upload area drag and drop
+        function setupUploadArea() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    uploadFile(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    uploadFile(e.target.files[0]);
+                }
+            });
+        }
+
+        // Upload file
+        async function uploadFile(file) {
+            const statusDiv = document.getElementById('upload-status');
+            statusDiv.innerHTML = '<div class="status info"><span class="loading"></span> Uploading and processing...</div>';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusDiv.innerHTML = `<div class="status success">✅ ${data.message}<br>File: ${data.filename}<br>Chunks added: ${data.chunks_added}</div>`;
+                    loadDocuments();
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">❌ Error: ${data.detail}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Upload failed: ${error.message}</div>`;
+            }
+        }
+
+        // Load documents
+        async function loadDocuments() {
+            const container = document.getElementById('documents-container');
+
+            try {
+                const response = await fetch(`${API_BASE}/documents`);
+                const documents = await response.json();
+
+                if (documents.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No documents uploaded yet</div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="documents-list">' +
+                    documents.map(doc => `
+                        <div class="document-item">
+                            <div class="document-info">
+                                <div class="document-name">📄 ${doc.filename}</div>
+                                <div class="document-meta">${doc.chunk_count} chunks • ${new Date(doc.created_at).toLocaleString()}</div>
+                            </div>
+                            <button class="btn btn-danger btn-delete" onclick="deleteDocument('${doc.filename}')">Delete</button>
+                        </div>
+                    `).join('') +
+                    '</div>';
+            } catch (error) {
+                container.innerHTML = `<div class="status error">Failed to load documents: ${error.message}</div>`;
+            }
+        }
+
+        // Delete document
+        async function deleteDocument(filename) {
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/documents/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadDocuments();
+                } else {
+                    const data = await response.json();
+                    alert(`Error: ${data.detail}`);
+                }
+            } catch (error) {
+                alert(`Failed to delete: ${error.message}`);
+            }
+        }
+
+        // Query documents
+        async function queryDocuments() {
+            const queryInput = document.getElementById('query-input');
+            const topK = document.getElementById('top-k').value;
+            const query = queryInput.value.trim();
+
+            if (!query) {
+                alert('Please enter a question');
+                return;
+            }
+
+            const queryBtn = document.getElementById('query-btn');
+            const resultsCard = document.getElementById('results-card');
+            const resultsContainer = document.getElementById('results-container');
+
+            // Show loading state
+            queryBtn.disabled = true;
+            queryBtn.innerHTML = '<span class="loading"></span> Searching...';
+            resultsCard.style.display = 'block';
+            resultsContainer.innerHTML = '<div class="status info">Searching knowledge base...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: query,
+                        top_k: parseInt(topK)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.results.length === 0) {
+                    resultsContainer.innerHTML = '<div class="empty-state">No relevant documents found. Try uploading some documents first!</div>';
+                } else {
+                    resultsContainer.innerHTML = data.results.map((result, index) => `
+                        <div class="result-item">
+                            <div class="result-header">
+                                <span class="result-source">📄 ${result.filename} (Chunk ${result.chunk_index + 1})</span>
+                                <span class="result-score">Score: ${result.similarity.toFixed(4)}</span>
+                            </div>
+                            <div class="result-content">${escapeHtml(result.content)}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                resultsContainer.innerHTML = `<div class="status error">Query failed: ${error.message}</div>`;
+            } finally {
+                queryBtn.disabled = false;
+                queryBtn.innerHTML = 'Search';
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Allow Enter key to submit query
+        document.getElementById('query-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                queryDocuments();
+            }
+        });
+    </script>
+</body>
+</html>

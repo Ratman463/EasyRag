@@ -1,0 +1,162 @@
+"""
+Embedding module for document processing and vector generation.
+"""
+import os
+from typing import List, Tuple
+from sentence_transformers import SentenceTransformer
+import config
+
+
+class EmbeddingEngine:
+    """Handles text embedding and document processing."""
+    
+    def __init__(self):
+        """Initialize the embedding model."""
+        self.model = SentenceTransformer(config.EMBEDDING_MODEL)
+    
+    def chunk_text(self, text: str, chunk_size: int = config.CHUNK_SIZE, 
+                   overlap: int = config.CHUNK_OVERLAP) -> List[str]:
+        """
+        Split text into overlapping chunks.
+        
+        Args:
+            text: Text to split
+            chunk_size: Maximum characters per chunk
+            overlap: Number of overlapping characters between chunks
+            
+        Returns:
+            List of text chunks
+        """
+        if len(text) <= chunk_size:
+            return [text.strip()] if text.strip() else []
+        
+        chunks = []
+        start = 0
+        
+        while start < len(text):
+            end = start + chunk_size
+            
+            # Try to find a good break point (sentence end)
+            if end < len(text):
+                # Look for sentence endings
+                for break_char in ['.', '!', '?', '\n']:
+                    last_break = text.rfind(break_char, start, end)
+                    if last_break > start:
+                        end = last_break + 1
+                        break
+            
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            
+            # Move start with overlap
+            start = end - overlap if end < len(text) else end
+        
+        return chunks
+    
+    def embed_text(self, text: str) -> List[float]:
+        """
+        Generate embedding for a text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Vector embedding as list
+        """
+        embedding = self.model.encode(text, convert_to_numpy=True)
+        return embedding.tolist()
+    
+    def embed_chunks(self, chunks: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for multiple chunks.
+        
+        Args:
+            chunks: List of text chunks
+            
+        Returns:
+            List of vector embeddings
+        """
+        embeddings = self.model.encode(chunks, convert_to_numpy=True)
+        return [emb.tolist() for emb in embeddings]
+    
+    def process_text(self, text: str) -> List[Tuple[str, List[float]]]:
+        """
+        Process text: chunk and embed.
+        
+        Args:
+            text: Full text content
+            
+        Returns:
+            List of (chunk, embedding) tuples
+        """
+        chunks = self.chunk_text(text)
+        if not chunks:
+            return []
+        
+        embeddings = self.embed_chunks(chunks)
+        return list(zip(chunks, embeddings))
+
+
+class DocumentProcessor:
+    """Handles document file processing."""
+    
+    @staticmethod
+    def read_txt(file_path: str) -> str:
+        """Read plain text file."""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    
+    @staticmethod
+    def read_pdf(file_path: str) -> str:
+        """Read PDF file."""
+        from pypdf import PdfReader
+        reader = PdfReader(file_path)
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return '\n'.join(text_parts)
+    
+    @staticmethod
+    def read_docx(file_path: str) -> str:
+        """Read DOCX file."""
+        from docx import Document
+        doc = Document(file_path)
+        text_parts = [paragraph.text for paragraph in doc.paragraphs if paragraph.text]
+        return '\n'.join(text_parts)
+    
+    @classmethod
+    def read_document(cls, file_path: str) -> str:
+        """
+        Read document based on extension.
+        
+        Args:
+            file_path: Path to the document
+            
+        Returns:
+            Extracted text content
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        if ext == '.txt':
+            return cls.read_txt(file_path)
+        elif ext == '.pdf':
+            return cls.read_pdf(file_path)
+        elif ext == '.docx':
+            return cls.read_docx(file_path)
+        else:
+            raise ValueError(f"Unsupported file extension: {ext}")
+
+
+# Global instances
+_embedding_engine: EmbeddingEngine = None
+
+
+def get_embedding_engine() -> EmbeddingEngine:
+    """Get or create embedding engine instance."""
+    global _embedding_engine
+    if _embedding_engine is None:
+        _embedding_engine = EmbeddingEngine()
+    return _embedding_engine
